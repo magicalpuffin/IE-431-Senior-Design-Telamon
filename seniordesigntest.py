@@ -12,16 +12,32 @@ shipping_df["Sales Order Number"]
 value_counts = shipping_df["Sales Order Number"].value_counts()
 
 # Cleans product data frame to only important columns
-filtered_product_df = product_df[["Vendor Part No", "Item Weight (Lb. -Base UOM)", "Item Dimensions (LxWxH inches)"]]
-filtered_product_df = filtered_product_df.rename(columns={"Vendor Part No": "Item"})
-# filtered_product_df["Item Weight (Lb. -Base UOM)"] = filtered_product_df["Item Weight (Lb. -Base UOM)"].fillna(0)
-filtered_product_df
+product_df_filt = product_df[["Vendor Part No", "Item Weight (Lb. -Base UOM)", "Item Dimensions (LxWxH inches)"]]
+product_df_filt = product_df_filt.rename(columns={"Vendor Part No": "Item"})
+product_df_filt
+
+# Fills na or missing weight data in product list, used to just preserve data during merges
+# Line can be disabled to toggle between switching
+product_df_filt["Item Weight (Lb. -Base UOM)"] = product_df_filt["Item Weight (Lb. -Base UOM)"].fillna(0)
 
 # Merges data, left merge to preserve shipping orders
-# Value
-merged_df = pd.merge(shipping_df, filtered_product_df, on ="Item", how="left")
-merged_df
-cleaned_merged_df = merged_df[merged_df["Item Weight (Lb. -Base UOM)"].isna() == False]
+merged_df = pd.merge(shipping_df, product_df_filt, on ="Item", how="left")
+merged_df_clean = merged_df[merged_df["Item Weight (Lb. -Base UOM)"].isna() == False]
+merged_df_clean
 
-cleaned_merged_df["Item Dimensions (LxWxH inches)"].value_counts()
-cleaned_merged_df["Sales Order Number"].value_counts()
+# Count of different dimensions
+# Count of different sales orders
+merged_df_clean["Item Dimensions (LxWxH inches)"].value_counts()
+merged_df_clean["Sales Order Number"].value_counts()
+
+output_df = [merged_df_clean, merged_df]
+output_names = ["Cleaned Merged Data", "Merged Data"]
+
+def df_to_excel(df_list, name_list, file_name = "excel_output.xlsx"):
+    datatoexcel = pd.ExcelWriter(file_name)
+    for df, name in zip(df_list, name_list):
+        df.to_excel(excel_writer = datatoexcel, sheet_name = name)
+    datatoexcel.save()
+    return
+
+df_to_excel(output_df, output_names)
