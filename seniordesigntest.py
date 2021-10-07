@@ -1,43 +1,48 @@
 import pandas as pd
+from SO_Item_Analysis_Functions import *
 
 # Imports excel data and converts to dataframes
-shipping_df = pd.read_excel("1 Year SO Issues Purdue.xlsx")
-product_df = pd.read_excel("W&D Purdue 9-29-21.xlsx")
-shipping_df
-product_df
+shipping_df = pd.read_excel("1 Year Shipping Orders.xlsx")
+item_df_1 = pd.read_excel("Item Warehouse Data 9-29-21.xlsx")
+item_df_2 = pd.read_excel("Item Warehouse Data 10-5-21.xlsx")
+# shipping_df
 
-# Testing various pandas operations
-shipping_df.iloc[:,0]
-shipping_df["Sales Order Number"]
-value_counts = shipping_df["Sales Order Number"].value_counts()
+shipping_df = shipping_df.rename(columns={"Item": "Item Number"})
+# Some dimensions will need unit conversion
+# item_df_2["Dimension UOM"].value_counts()
+# item_df_2.columns.values
+# Removes unnecessary columns
+# Creates seperate df with only values that are fully defined
+item_df_2 = item_df_2[["Item Number", "Description", "Item Type", "Product Category", "Unit Length", "Unit Width", "Unit Height", "Unit Weight"]]
+item_df_2_no_na = item_df_2[item_df_2["Unit Height"].isna() == False]
+
+# Items with dimensions but missing weight, may need to also check items with weight but missing dimensions
+# item_df_2_no_na[item_df_2_no_na["Unit Weight"].isna()]
 
 # Cleans product data frame to only important columns
-product_df_filt = product_df[["Vendor Part No", "Item Weight (Lb. -Base UOM)", "Item Dimensions (LxWxH inches)"]]
-product_df_filt = product_df_filt.rename(columns={"Vendor Part No": "Item"})
-product_df_filt
+item_df_1 = item_df_1[["Vendor Part No", "Item Weight (Lb. -Base UOM)", "Item Dimensions (LxWxH inches)"]]
+item_df_1 = item_df_1.rename(columns={"Vendor Part No": "Item Number"})
+item_df_1_no_na = item_df_1[item_df_1["Item Weight (Lb. -Base UOM)"].isna() == False]
+# item_df_1_no_na
 
-# Fills na or missing weight data in product list, used to just preserve data during merges
-# Line can be disabled to toggle between switching
-product_df_filt["Item Weight (Lb. -Base UOM)"] = product_df_filt["Item Weight (Lb. -Base UOM)"].fillna(0)
+# Shipping order items that are completely missing from both item data sets
+SO_miss_item_df = shipping_df[shipping_df["Item Number"].isin(item_df_2["Item Number"]) == False]
+SO_miss_item_df = SO_miss_item_df[SO_miss_item_df["Item Number"].isin(item_df_1["Item Number"]) == False]
+SO_miss_item_counts = SO_miss_item_df["Item Number"].value_counts()
+# Shipping order items missing dimensions from both item sets
+SO_miss_dims_df = shipping_df[shipping_df["Item Number"].isin(item_df_2_no_na["Item Number"]) == False]
+SO_miss_dims_df = SO_miss_dims_df[SO_miss_dims_df["Item Number"].isin(item_df_1_no_na["Item Number"]) == False]
+SO_miss_dims_counts = SO_miss_dims_df["Item Number"].value_counts()
 
+shipping_df_no_miss_dims = shipping_df[shipping_df["Item Number"].isin(SO_miss_dims_df["Item Number"]) == False]
+# Will need to make the merge account for both item lists
 # Merges data, left merge to preserve shipping orders
-merged_df = pd.merge(shipping_df, product_df_filt, on ="Item", how="left")
-merged_df_clean = merged_df[merged_df["Item Weight (Lb. -Base UOM)"].isna() == False]
-merged_df_clean
+merged_df = pd.merge(shipping_df_no_miss_dims, item_df_2, on ="Item Number", how="left")
 
-# Count of different dimensions
 # Count of different sales orders
-merged_df_clean["Item Dimensions (LxWxH inches)"].value_counts()
-merged_df_clean["Sales Order Number"].value_counts()
+# merged_df["Sales Order Number"].value_counts()
 
-output_df = [merged_df_clean, merged_df]
-output_names = ["Cleaned Merged Data", "Merged Data"]
-
-def df_to_excel(df_list, name_list, file_name = "excel_output.xlsx"):
-    datatoexcel = pd.ExcelWriter(file_name)
-    for df, name in zip(df_list, name_list):
-        df.to_excel(excel_writer = datatoexcel, sheet_name = name)
-    datatoexcel.save()
-    return
+output_df = [merged_df, SO_miss_item_counts, SO_miss_dims_counts, SO_miss_item_df, SO_miss_dims_df]
+output_names = ["Merged Full Data", "Missing Items Count in SO", "Missing Dims Count in SO", "SO Missing Items", "SO Missing Dims"]
 
 df_to_excel(output_df, output_names)
