@@ -8,6 +8,7 @@ item_df_2 = pd.read_excel("Item Warehouse Data 10-5-21.xlsx")
 # shipping_df
 
 shipping_df = shipping_df.rename(columns={"Item": "Item Number"})
+
 # Some dimensions will need unit conversion
 # item_df_2["Dimension UOM"].value_counts()
 # item_df_2.columns.values
@@ -39,6 +40,8 @@ shipping_df_no_miss_dims = shipping_df[shipping_df["Item Number"].isin(SO_miss_d
 # Merges data, left merge to preserve shipping orders
 merged_df = pd.merge(shipping_df_no_miss_dims, item_df_2, on ="Item Number", how="left")
 
+
+indexed_df = merged_df.set_index(["Sales Order Number", "Item Number"])
 # Count of different sales orders
 # merged_df["Sales Order Number"].value_counts()
 
