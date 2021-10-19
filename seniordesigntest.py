@@ -9,45 +9,7 @@ item_df_2 = pd.read_excel("Item Warehouse Data 10-5-21.xlsx")
 
 shipping_df = shipping_df.rename(columns={"Item": "Item Number"})
 
-# Some dimensions will need unit conversion
-# item_df_2["Dimension UOM"].value_counts()
-# item_df_2.columns.values
-
-# item_df_2_clean = item_df_clean(item_df_2)
-
-item_df = item_df_2
-# ----
-# Removes unnecessary items by creating dataframes of items with issues and using df.isin to filter
-# Creates dataframe of items missing dims and weights
-# Most data with one unit dim have the rest but this filter is safer
-item_df_missing_dim = item_df[(item_df["Unit Length"].isna()) | 
-                                (item_df["Unit Width"].isna()) | 
-                                (item_df["Unit Height"].isna())]
-item_df_missing_weight = item_df[item_df["Unit Weight"].isna()]
-
-# Item df of all items that aren't missing dims and weights
-item_df_no_na = item_df[(item_df["Item Number"].isin(item_df_missing_weight["Item Number"]) == False) & 
-                    (item_df["Item Number"].isin(item_df_missing_dim["Item Number"]) == False)]
-
-# Of the items that have dims and weights, filter our items in wrong units and weights
-# Very few items have mislabled units, safer to filter
-item_df_wrong_dim_UOM =  item_df_no_na[(item_df_no_na["Dimension UOM"] != "In") & (item_df_no_na["Dimension UOM"] != "Ft")]
-item_df_wrong_weight_UOM = item_df_no_na[(item_df_no_na["Weight UOM"] != "Lbs")]
-
-# Cleaned data item data, currently missing unit conversions
-item_df_clean = item_df_no_na[(item_df_no_na["Item Number"].isin(item_df_wrong_dim_UOM["Item Number"]) == False) & 
-                    (item_df_no_na["Item Number"].isin(item_df_wrong_weight_UOM["Item Number"]) == False)]
-
-item_df_clean.loc[item_df_clean["Dimension UOM"] == "Ft", ["Unit Length", "Unit Width", "Unit Height"]] = item_df_clean[item_df_clean["Dimension UOM"] == "Ft"][["Unit Length", "Unit Width", "Unit Height"]] * 12
-
-# Keeps only useful columns
-item_df_clean = item_df_clean[["Item Number", "Description", "Item Type", "Product Category", "Unit Length", "Unit Width", "Unit Height", "Unit Weight"]]
-
-item_df_missing_dim = item_df_missing_dim.assign(exclude_reason = "Missing Dimension")
-item_df_missing_weight = item_df_missing_weight.assign(exclude_reason = "Missing Weight")
-item_df_wrong_dim_UOM = item_df_wrong_dim_UOM.assign(exclude_reason = "Wrong Dimension Units")
-item_df_wrong_weight_UOM = item_df_wrong_weight_UOM.assign(exclude_reason = "Wrong Weight Units")
-item_df_excluded = pd.concat([item_df_missing_dim, item_df_missing_weight, item_df_wrong_dim_UOM, item_df_wrong_weight_UOM])
+item_df_2_clean, item_df_2_excluded = item_df_clean(item_df_2)
 
 # ----
 # Items with dimensions but missing weight, may need to also check items with weight but missing dimensions
