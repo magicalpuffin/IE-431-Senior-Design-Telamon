@@ -1,4 +1,5 @@
 import pandas as pd
+import matplotlib.pyplot as plt
 from SO_Item_Analysis_Functions import *
 
 # Imports excel data and converts to dataframes
@@ -10,11 +11,58 @@ item_df_2 = pd.read_excel("Item Warehouse Data 10-5-21.xlsx")
 shipping_df = shipping_df.rename(columns={"Item": "Item Number"})
 
 item_df_2_clean, item_df_2_excluded = item_df_clean(item_df_2)
+merged_df = pd.merge(shipping_df, item_df_2_clean, on ="Item Number", how="left")
+
+missing_info_SO = merged_df[merged_df["Unit Length"].isna()]["Sales Order Number"]
+merged_df_clean = merged_df[(merged_df["Sales Order Number"].isin(missing_info_SO) == False)]
+
+merged_df_clean.loc[:, ["Unit Volume"]] = merged_df_clean["Unit Length"] * merged_df_clean["Unit Width"] * merged_df_clean["Unit Height"]
+merged_df_clean.loc[:, ["Total Volume"]] = -merged_df_clean["Quantity"] * merged_df_clean["Unit Volume"]
+merged_df_clean.loc[:, ["Total Weight"]] = -merged_df_clean["Quantity"] * merged_df_clean["Unit Weight"]
+
+indexed_df = merged_df_clean.set_index(["Sales Order Number", "Item Number"])
+
+indexed_df.loc["1112680.Sales TL.ORDER ENTRY"]
+SO_volume = indexed_df.groupby(level = 0)["Total Volume"].sum()
+SO_weight = indexed_df.groupby(level = 0)["Total Weight"].sum()
+SO_quantities = indexed_df.groupby(level = 0)["Quantity"].sum()
+
+output_df_1 = [item_df_2_clean, item_df_2_excluded, missing_info_SO, merged_df_clean]
+name_df_1 = ["Cleaned item data", "Excluded item data", "Missing info SO", "Merged SO Clean"]
+df_to_excel(output_df_1, name_df_1, "clean_data.xlsx")
+
+output_df_2 = [SO_volume, SO_weight]
+name_df_2 = ["SO Volumes", "SO_weights"]
+df_to_excel(output_df_2, name_df_2, "SO_analysis.xlsx")
+
+plt.clf()
+# Makes histogram, 12000 in^3 is max box size
+SO_vol_hist = SO_volume.hist()
+# SO_vol_hist = SO_volume.hist(bins = range(0, 12000, 1000))
+plt.xlabel("Shipping Order Volume in^3")
+plt.ylabel("Frequency")
+plt.title("Frequency of Shipping Order Volumes")
+plt.show()
+
+plt.clf()
+SO_weight_hist = SO_weight.hist()
+# SO_weight_hist = SO_weight.hist(bins = range(0, 50, 5))
+plt.xlabel("Shipping Order Weight lb")
+plt.ylabel("Frequency")
+plt.title("Frequency of Shipping Order Weights")
+plt.show()
+
+plt.clf()
+SO_quantities_hist = SO_quantities.hist()
+# SO_quantities_hist = SO_quantities.hist(bins = range(-50, 0, 5))
+plt.xlabel("Shipping Order Quantities")
+plt.ylabel("Frequency")
+plt.title("Frequency of Shipping Order Quantities")
+plt.show()
 
 # ----
+# Code underneath may be ignored and out dated
 # Items with dimensions but missing weight, may need to also check items with weight but missing dimensions
-# item_df_2_no_na[item_df_2_no_na["Unit Weight"].isna()]
-
 # Cleans product data frame to only important columns
 item_df_1 = item_df_1[["Vendor Part No", "Item Weight (Lb. -Base UOM)", "Item Dimensions (LxWxH inches)"]]
 item_df_1 = item_df_1.rename(columns={"Vendor Part No": "Item Number"})

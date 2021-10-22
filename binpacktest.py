@@ -1,7 +1,19 @@
+import pandas as pd
 from py3dbp import Packer, Bin, Item
 
+# -----
 packer = Packer()
 
+# ----
+test_bins = pd.read_excel("data_test.xlsx", "Bins")
+test_items = pd.read_excel("data_test.xlsx", "Items")
+
+for index, row in test_bins.iterrows():
+    packer.add_bin(Bin(row["Bin Name"], row["Length"], row["Width"], row["Height"], row["Weight"]))
+for index, row in test_items.iterrows():
+    packer.add_item(Item(row["Item Name"], row["Length"], row["Width"], row["Height"], row["Weight"]))
+
+# ----
 packer.add_bin(Bin('small-envelope', 11.5, 6.125, 0.25, 10))
 packer.add_bin(Bin('large-envelope', 15.0, 12.0, 0.75, 15))
 packer.add_bin(Bin('small-box', 8.625, 5.375, 1.625, 70.0))
@@ -35,4 +47,3 @@ for b in packer.bins:
 
     print("***************************************************")
     print("***************************************************")
-
