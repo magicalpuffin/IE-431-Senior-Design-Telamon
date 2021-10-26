@@ -4,37 +4,31 @@ from SO_Item_Analysis_Functions import *
 
 # Imports excel data and converts to dataframes
 shipping_df = pd.read_excel("1 Year Shipping Orders.xlsx")
-item_df_1 = pd.read_excel("Item Warehouse Data 9-29-21.xlsx")
+# item_df_1 = pd.read_excel("Item Warehouse Data 9-29-21.xlsx")
 item_df_2 = pd.read_excel("Item Warehouse Data 10-5-21.xlsx")
-# shipping_df
 
 shipping_df = shipping_df.rename(columns={"Item": "Item Number"})
+shipping_df.loc[:, ["Quantity"]] = -shipping_df["Quantity"]
 
 item_df_2_clean, item_df_2_excluded = item_df_clean(item_df_2)
-merged_df = pd.merge(shipping_df, item_df_2_clean, on ="Item Number", how="left")
-
-missing_info_SO = merged_df[merged_df["Unit Length"].isna()]["Sales Order Number"]
-merged_df_clean = merged_df[(merged_df["Sales Order Number"].isin(missing_info_SO) == False)]
-
-merged_df_clean.loc[:, ["Unit Volume"]] = merged_df_clean["Unit Length"] * merged_df_clean["Unit Width"] * merged_df_clean["Unit Height"]
-merged_df_clean.loc[:, ["Total Volume"]] = -merged_df_clean["Quantity"] * merged_df_clean["Unit Volume"]
-merged_df_clean.loc[:, ["Total Weight"]] = -merged_df_clean["Quantity"] * merged_df_clean["Unit Weight"]
+merged_df_clean, shipping_df_item_na = clean_merged_df(shipping_df, item_df_2_clean)
 
 indexed_df = merged_df_clean.set_index(["Sales Order Number", "Item Number"])
 
-indexed_df.loc["1112680.Sales TL.ORDER ENTRY"]
+output_df_1 = [item_df_2_clean, item_df_2_excluded, shipping_df_item_na, merged_df_clean]
+name_df_1 = ["Cleaned item data", "Excluded item data", "Missing info SO", "Merged SO Clean"]
+df_to_excel(output_df_1, name_df_1, "clean_data.xlsx")
+
 SO_volume = indexed_df.groupby(level = 0)["Total Volume"].sum()
 SO_weight = indexed_df.groupby(level = 0)["Total Weight"].sum()
 SO_quantities = indexed_df.groupby(level = 0)["Quantity"].sum()
-
-output_df_1 = [item_df_2_clean, item_df_2_excluded, missing_info_SO, merged_df_clean]
-name_df_1 = ["Cleaned item data", "Excluded item data", "Missing info SO", "Merged SO Clean"]
-df_to_excel(output_df_1, name_df_1, "clean_data.xlsx")
 
 output_df_2 = [SO_volume, SO_weight]
 name_df_2 = ["SO Volumes", "SO_weights"]
 df_to_excel(output_df_2, name_df_2, "SO_analysis.xlsx")
 
+# -----
+# Generate graphs
 plt.clf()
 # Makes histogram, 12000 in^3 is max box size
 SO_vol_hist = SO_volume.hist()
@@ -53,8 +47,8 @@ plt.title("Frequency of Shipping Order Weights")
 plt.show()
 
 plt.clf()
-SO_quantities_hist = SO_quantities.hist()
-# SO_quantities_hist = SO_quantities.hist(bins = range(-50, 0, 5))
+# SO_quantities_hist = SO_quantities.hist()
+SO_quantities_hist = SO_quantities.hist(bins = range(0, 50, 5))
 plt.xlabel("Shipping Order Quantities")
 plt.ylabel("Frequency")
 plt.title("Frequency of Shipping Order Quantities")

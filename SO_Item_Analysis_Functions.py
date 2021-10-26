@@ -3,7 +3,7 @@ import pandas as pd
 def df_to_excel(df_list, name_list, file_name = "py_excel_output.xlsx"):
     """
     Inputs list of dataframes and names and outputs to excel \n
-    Parameters: \n
+    Arguments: \n
         df_list: list of dataframes to be export to excel file \n
         name_list: list of names to assigned to each dataframe exported \n
         file_name: file name of excel sheet, defaults to py_excel_output.xlsx \n
@@ -19,7 +19,7 @@ def item_df_clean(item_df):
     """
     Cleans item dataframe, removes missing dims, weights, wrong dim, wrong weights. Returns cleaned item df and excluded items\n
     Filters in order of missing dims, missing weights, wrong dim UOM, wrong weight UOM\n
-    Parameters: \n
+    Arguments: \n
         item_df: item dataframe, requires a standard format \n
     Returns: \n
         item_df_clean: cleaned item data with uniform units (in, lbs) and no missing values \n
@@ -49,9 +49,10 @@ def item_df_clean(item_df):
     # Cleaned data item data, do unit conversion to be in inches
     item_df_clean.loc[item_df_clean["Dimension UOM"] == "Ft", ["Unit Length", "Unit Width", "Unit Height"]] = item_df_clean[item_df_clean["Dimension UOM"] == "Ft"][["Unit Length", "Unit Width", "Unit Height"]] * 12
     item_df_clean.loc[item_df_clean["Dimension UOM"] == "Ft", ["Dimension UOM"]] = "In"
+    item_df_clean.loc[:, ["Unit Volume"]] = item_df_clean["Unit Length"] * item_df_clean["Unit Width"] * item_df_clean["Unit Height"]
 
     # Keeps only useful columns
-    item_df_clean = item_df_clean[["Item Number", "Description", "Item Type", "Product Category", "Unit Length", "Unit Width", "Unit Height", "Unit Weight"]]
+    item_df_clean = item_df_clean[["Item Number", "Description", "Item Type", "Product Category", "Unit Length", "Unit Width", "Unit Height", "Unit Weight", "Unit Volume"]]
 
     # Adds new column to all dataframes to describe exlusion reason and concats together
     item_df_missing_dim = item_df_missing_dim.assign(exclude_reason = "Missing Dimension")
@@ -61,3 +62,23 @@ def item_df_clean(item_df):
     item_df_excluded = pd.concat([item_df_missing_dim, item_df_missing_weight, item_df_wrong_dim_UOM, item_df_wrong_weight_UOM])
 
     return item_df_clean, item_df_excluded
+
+def clean_merged_df(shipping_df, item_df_clean):
+    """
+    Merges shipping dataframe with clean item dataframe to get a dataframe with shipping orders and item dims\n
+    Calculates total total\n
+    Arguments:\n
+    Returns:\n
+    """
+    # Merges the shipping dataframe with item dataframe on items
+    merged_df = pd.merge(shipping_df, item_df_clean, on ="Item Number", how="left")
+    
+    # Filters out the shipping orders missing items
+    shipping_df_item_na = merged_df[merged_df["Unit Length"].isna()]
+    merged_df_clean = merged_df[(merged_df["Sales Order Number"].isin(shipping_df_item_na["Sales Order Number"]) == False)]
+
+    # Finds the total volume and total weight for shipping orders
+    merged_df_clean.loc[:, ["Total Volume"]] = merged_df_clean["Quantity"] * merged_df_clean["Unit Volume"]
+    merged_df_clean.loc[:, ["Total Weight"]] = merged_df_clean["Quantity"] * merged_df_clean["Unit Weight"]
+    
+    return merged_df_clean, shipping_df_item_na

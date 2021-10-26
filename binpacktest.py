@@ -1,6 +1,8 @@
 import pandas as pd
 from py3dbp import Packer, Bin, Item
-
+# Misc notes
+# Inut shipping order, bins
+# Output packer object, bin that fit, bin name, bin volume, difference in volume, difference in weight
 # -----
 packer = Packer()
 
@@ -8,10 +10,37 @@ packer = Packer()
 test_bins = pd.read_excel("data_test.xlsx", "Bins")
 test_items = pd.read_excel("data_test.xlsx", "Items")
 
+indexed_df = test_items.set_index(["Sales Order Number", "Item Number"])
+
+# The process of making a fucntion seems promissing, group and apply can be used to...
+# apply a function on each grouping and returns a result, should be possible to fit...
+# the entire packing process into a function
+def testfunc(df):
+    return df.iloc[0]["Quantity"]
+
+indexed_df.groupby(level = 0).sum()
+indexed_df.groupby(level = 0).apply(testfunc)
+
+# Adds all items within the SO into packer object
+SO_1 = indexed_df.loc[1001]
+# SO_1.iloc[0]["Quantity"]
+for index, row in SO_1.iterrows():
+    # index
+    # row["Quantity"]
+    for i in range(int(row["Quantity"])):
+        packer.add_item(Item(index, row["Length"], row["Width"], row["Height"], row["Weight"]))
+
+# Debug to check items in packer
+packer.items
+for itm in packer.items:
+    itm.string()
+
+# Adds all bins from seperate sheet into packer object
 for index, row in test_bins.iterrows():
     packer.add_bin(Bin(row["Bin Name"], row["Length"], row["Width"], row["Height"], row["Weight"]))
-for index, row in test_items.iterrows():
-    packer.add_item(Item(row["Item Name"], row["Length"], row["Width"], row["Height"], row["Weight"]))
+
+# for index, row in test_items.iterrows():
+#     packer.add_item(Item(row["Item Number"], row["Length"], row["Width"], row["Height"], row["Weight"]))
 
 # ----
 packer.add_bin(Bin('small-envelope', 11.5, 6.125, 0.25, 10))
@@ -47,3 +76,22 @@ for b in packer.bins:
 
     print("***************************************************")
     print("***************************************************")
+
+# Find the smallest volume bin that fits all items
+# Loops through bins to find one that has all items, defaults to largest bin
+bestbin = packer.bins[-1]
+for b in packer.bins:
+    if len(b.unfitted_items) == 0:
+        bestbin = b
+        break
+# Parameters of bin to debug
+bestbin.string()
+bestbin.get_volume()
+bestbin.max_weight
+
+# Finds total item weight and volume, can be used to compare with available vol and weight in bin
+total_item_vol = 0
+total_item_weight = 0
+for i in bestbin.items:
+    total_item_vol = total_item_vol + i.get_volume()
+    total_item_weight = total_item_weight + i.weight
