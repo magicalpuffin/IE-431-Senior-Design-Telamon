@@ -1,5 +1,6 @@
 import pandas as pd
 from py3dbp import Packer, Bin, Item
+from SO_Item_Analysis_Functions import *
 
 # Misc notes
 # This is a buggy debug version and test environment
@@ -23,62 +24,9 @@ indexed_df = test_items.set_index(["Sales Order Number", "Item Number"])
 def testfunc(df):
     return pd.Series({'col1': df.iloc[0]["Quantity"], 'col2':2})
 
-def pack_SO(df, bin_df=test_bins):
-    # Interpret the SO dataframe and bin_df. Enter info into packer
-    packer = Packer()
-
-    # Loops through each item in SO, adds item to packer based on quantity
-    for index, row in df.iterrows():
-        for i in range(int(row["Quantity"])):
-            packer.add_item(Item(index, row["Unit Length"], row["Unit Width"], row["Unit Height"], row["Unit Weight"]))
-
-    # Adds all bins from seperate sheet into packer object
-    for index, row in bin_df.iterrows():
-        packer.add_bin(Bin(row["Bin Name"], row["Length"], row["Width"], row["Height"], row["Weight"]))
-    
-    packer.pack()
-
-    # Interpret the packed results
-    # ---
-    # Find the smallest volume bin that fits all items
-    # Loops through bins to find one that has all items, defaults to largest bin
-    bestbin = packer.bins[-1]
-    pack_status = False
-    for b in packer.bins:
-        if len(b.unfitted_items) == 0:
-            bestbin = b
-            pack_status = True
-            break
-    # Parameters of bin to debug
-    bin_name = bestbin.name
-    bin_vol = bestbin.get_volume()
-    bin_weight = bestbin.max_weight
-
-    # Finds total item weight and volume, can be used to compare with available vol and weight in bin
-    # Uses Decimal module. I don't know how to use it so I convert it to float
-    total_item_vol = 0
-    total_item_weight = 0
-    for i in bestbin.items:
-        total_item_vol = total_item_vol + i.get_volume()
-        total_item_weight = total_item_weight + i.weight
-    vol_diff = float(bin_vol - total_item_vol)
-    weight_diff = float(bin_weight - total_item_weight)
-
-    output_sr = pd.Series({'Packer': packer, 
-                           'Pack Status': pack_status, 
-                           'Best Bin': bestbin, 
-                           'Bin Name': bin_name, 
-                           'Bin Volume': bin_vol, 
-                           'Bin Weight': bin_weight, 
-                           'Total Item Vol': total_item_vol, 
-                           'Total Item Weight': total_item_weight, 
-                           'Volume Difference': vol_diff, 
-                           'Weight Difference': weight_diff})
-    return output_sr
-
 indexed_df.groupby(level = 0).sum()
 indexed_df.groupby(level = 0).apply(testfunc)
-packed_SO_debug = indexed_df.groupby(level = 0).apply(pack_SO)
+packed_SO_debug = indexed_df.groupby(level = 0).apply(pack_SO, bin_df = test_bins)
 packed_SO = packed_SO_debug[['Pack Status', 'Bin Name', 'Volume Difference', 'Weight Difference']]
 # Debug to check items in packer
 packer.items

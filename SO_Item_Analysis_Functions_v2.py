@@ -16,7 +16,56 @@ def df_to_excel(df_list, name_list, file_name = "py_excel_output.xlsx"):
     datatoexcel.save()
     return
 
-def item_df_clean(item_df):
+def remove_na_in_cols(df, col_names = []):
+    """
+    Removes rows with a na in the specified columns. Outputs cleaned dataframe and a dataframe what was removed. \n
+    Due to the loop, the exclude reason will prioritize the first item in list. \n
+    Arguments: \n
+        df: Dataframe that you want remove the na from \n
+        col_names: List of strings. Names of columns that should check for na values \n
+    Returns: \n
+        clean_df: Dataframe without na in any of the specified columns \n
+        na_df: Dataframe with na in the specified columns and exclusion reason \n
+    """
+    clean_df = df
+    na_df = pd.DataFrame()
+    for col_name in col_names:
+        # Creates temporary dataframe of na in column
+        # Temporary dataframe assigned exclusion reason
+        # Data removed from clean_df by droping the index
+        # The temp_na_df is concated to the na_df
+        temp_na_df = clean_df[clean_df[col_name].isna()]
+        temp_na_df = temp_na_df.assign(exclude_reason = "NA in " + col_name)
+        clean_df = clean_df.drop(temp_na_df.index.values)
+        na_df = pd.concat([na_df, temp_na_df])
+    return clean_df, na_df
+
+def remove_val_in_cols(df, col_val_dict = {}):
+    """
+    Removes rows based on specified values in the specified columns. Outputs cleaned dataframe and a dataframe what was removed. \n
+    Due to the loop, the exclude reason will prioritize the first item in dictionary. \n
+    Arguments: \n
+        df: Dataframe that you want remove rows based on values in columns \n
+        col_val_dict: Dictionary with key of column names and value of list of values to remove. Value must be a list. \n
+            Ex. {"Dimension UOM": ["Ft", "In"], "Weight UOM": ["Lbs"]} \n
+    Returns: \n
+        clean_df: Dataframe without the specified values in any of the specified columns \n
+        not_val_df: Dataframe with na in the specified columns and exclusion reason \n
+    """
+    clean_df = df
+    not_val_df = pd.DataFrame()
+    for key, value in col_val_dict.items():
+        # Creates temporary dataframe of incorrect val in column
+        # Exclusion reason added to temporary dataframe
+        # Data removed from clean_df by droping the index
+        # The temp_not_val_df is concated to the not_val_df
+        temp_not_val_df = clean_df[clean_df[key].isin(value) == False]
+        temp_not_val_df = temp_not_val_df.assign(exclude_reason = "Unacceptable value in " + key)
+        clean_df = clean_df.drop(temp_not_val_df.index.values)
+        not_val_df = pd.concat([not_val_df, temp_not_val_df])
+    return clean_df, not_val_df
+
+def clean_item_df(item_df):
     """
     Cleans item dataframe, removes missing dims, weights, wrong dim, wrong weights. Returns cleaned item df and excluded items\n
     Filters in order of missing dims, missing weights, wrong dim UOM, wrong weight UOM\n
@@ -26,26 +75,11 @@ def item_df_clean(item_df):
         item_df_clean: cleaned item data with uniform units (in, lbs) and no missing values \n
         item_df_excluded: all removed items and reason of removal \n
     """
-    # Removes items with issues by making a dataframe of bad items and then using df.isin to filter
-    # Filters in layers in order to minimize repeated items
-    # Current use of item_df and item_df_no_na is a bit messy
-    # Filter missing dims
-    item_df_missing_dim = item_df[(item_df["Unit Length"].isna()) | 
-                                  (item_df["Unit Width"].isna()) | 
-                                  (item_df["Unit Height"].isna())]
-    item_df_no_na = item_df[(item_df["Item Number"].isin(item_df_missing_dim["Item Number"]) == False)]
+    
+    item_df_clean, item_df_na = remove_na_in_cols(item_df, ["Unit Length", "Unit Width", "Unit Height", "Unit Weight", 
+                                                     "Dimension UOM", "Weight UOM"])
 
-    # Filter missing weights
-    item_df_missing_weight = item_df_no_na[item_df_no_na["Unit Weight"].isna()]
-    item_df_no_na = item_df_no_na[(item_df_no_na["Item Number"].isin(item_df_missing_weight["Item Number"]) == False)]
-
-    # Filter units that are not imperial
-    item_df_wrong_dim_UOM =  item_df_no_na[(item_df_no_na["Dimension UOM"] != "In") & (item_df_no_na["Dimension UOM"] != "Ft")]
-    item_df_no_na = item_df_no_na[(item_df_no_na["Item Number"].isin(item_df_wrong_dim_UOM["Item Number"]) == False)]
-
-    # Filter weights not lbs, most data is usually fine
-    item_df_wrong_weight_UOM = item_df_no_na[(item_df_no_na["Weight UOM"] != "Lbs")]
-    item_df_clean = item_df_no_na[(item_df_no_na["Item Number"].isin(item_df_wrong_dim_UOM["Item Number"]) == False)]
+    item_df_clean, item_df_val = remove_val_in_cols(item_df_clean, {"Dimension UOM": ["Ft", "In"], "Weight UOM": ["Lbs"]})
 
     # Cleaned data item data, do unit conversion to be in inches
     item_df_clean.loc[item_df_clean["Dimension UOM"] == "Ft", ["Unit Length", "Unit Width", "Unit Height"]] = item_df_clean[item_df_clean["Dimension UOM"] == "Ft"][["Unit Length", "Unit Width", "Unit Height"]] * 12
@@ -55,12 +89,7 @@ def item_df_clean(item_df):
     # Keeps only useful columns
     item_df_clean = item_df_clean[["Item Number", "Description", "Item Type", "Product Category", "Unit Length", "Unit Width", "Unit Height", "Unit Weight", "Unit Volume"]]
 
-    # Adds new column to all dataframes to describe exlusion reason and concats together
-    item_df_missing_dim = item_df_missing_dim.assign(exclude_reason = "Missing Dimension")
-    item_df_missing_weight = item_df_missing_weight.assign(exclude_reason = "Missing Weight")
-    item_df_wrong_dim_UOM = item_df_wrong_dim_UOM.assign(exclude_reason = "Wrong Dimension Units")
-    item_df_wrong_weight_UOM = item_df_wrong_weight_UOM.assign(exclude_reason = "Wrong Weight Units")
-    item_df_excluded = pd.concat([item_df_missing_dim, item_df_missing_weight, item_df_wrong_dim_UOM, item_df_wrong_weight_UOM])
+    item_df_excluded = pd.concat([item_df_na, item_df_val])
 
     return item_df_clean, item_df_excluded
 
