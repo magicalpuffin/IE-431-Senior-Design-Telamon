@@ -1,5 +1,5 @@
 import pandas as pd
-from SO_Item_Analysis_Functions import *
+# from SO_Item_Analysis_Functions import *
 from SO_Item_Analysis_Functions_v2 import *
 
 # Imports excel data and converts to dataframes
@@ -13,16 +13,10 @@ shipping_df = shipping_df.rename(columns={"Item": "Item Number"})
 shipping_df.loc[:, ["Quantity"]] = -shipping_df["Quantity"]
 
 # Data cleaning functions, filter out items missing data, filter out SO missing items
-item_df_2_clean, item_df_2_excluded = item_df_clean(item_df_2)
+item_df_2_clean, item_df_2_excluded = clean_item_df(item_df_2)
 merged_df_clean, shipping_df_item_na = clean_merged_df(shipping_df, item_df_2_clean)
+
 indexed_df = merged_df_clean.set_index(["Sales Order Number", "Item Number"])
-
-# 
-fun_test1, fun_test2 = remove_na_in_cols(item_df_2, ["Unit Length", "Unit Width", "Unit Height", "Unit Weight", 
-                                                     "Dimension UOM", "Weight UOM"])
-
-funt_test3, fun_test4 = remove_val_in_cols(fun_test1, {"Dimension UOM": ["Ft", "In"], "Weight UOM": ["Lbs"]})
-
 # ----
 # Output for debug and lists of excluded items and SO
 # output_df_1 = [item_df_2_clean, item_df_2_excluded, shipping_df_item_na, merged_df_clean]

@@ -117,6 +117,40 @@ def clean_merged_df(shipping_df, item_df_clean):
     
     return merged_df_clean, shipping_df_item_na
 
+def get_solution_bin(packer):
+    """
+    Finds the best bin that packed the items based on packing object. Will pick bin with smallest volume. \n
+    Defaults to the largest bin if packing failed. Outputs bin and true false status. \n
+    """
+    # Finds the smallest volume bin that fits all items by looping through in order until one fits all items
+    # Will default to largest bin if none can be found
+    # Determines if the items were packed or not in pack_status
+    bestbin = packer.bins[-1]
+    pack_status = False
+    for b in packer.bins:
+        if len(b.unfitted_items) == 0:
+            bestbin = b
+            pack_status = True
+            break
+    return bestbin, pack_status
+
+def get_excess_vol_weight(bin):
+    """
+    Takes a bin and finds the extra volume and weight left by the fitted items
+    """
+    total_item_vol = 0
+    total_item_weight = 0
+    for i in bin.items:
+        total_item_vol = total_item_vol + i.get_volume()
+        total_item_weight = total_item_weight + i.weight
+
+    # Determines the total item weight and volume in packed SO for validation and comparision with bin maximums
+    # Uses Decimal module. I don't know how to use it so I convert it to float
+
+    vol_diff = float(bin.get_volume() - total_item_vol)
+    weight_diff = float(bin.max_weight - total_item_weight)
+    return vol_diff, weight_diff
+
 def pack_SO(df, bin_df):
     """
     Determines the best bin to pack a shipping order. \n
@@ -140,53 +174,25 @@ def pack_SO(df, bin_df):
             packer.add_item(Item(index, row["Unit Length"], row["Unit Width"], row["Unit Height"], row["Unit Weight"]))
 
     # Loops though each bins and adds them into the packer object
+    # I want to switch this to use indexes but it breaks the package for some reason
     for index, row in bin_df.iterrows():
         packer.add_bin(Bin(row["Bin Name"], row["Length"], row["Width"], row["Height"], row["Weight"]))
     
     # Packer evaluates how well items are packed in each bin
     packer.pack()
     # ----
-
     # Interpret the packed results
     # Note that values from packer use the Decimal module
-    # ----
-    # Finds the smallest volume bin that fits all items by looping through in order until one fits all items
-    # Will default to largest bin if none can be found
-    # Determines if the items were packed or not in pack_status
-    bestbin = packer.bins[-1]
-    pack_status = False
-    for b in packer.bins:
-        if len(b.unfitted_items) == 0:
-            bestbin = b
-            pack_status = True
-            break
-    
-    # Creates variables for important parameters for the bin
+    bestbin, pack_status = get_solution_bin(packer)
+    vol_diff, weight_diff = get_excess_vol_weight(bestbin)
     bin_name = bestbin.name
-    bin_vol = bestbin.get_volume()
-    bin_weight = bestbin.max_weight
-
-    # Determines the total item weight and volume in packed SO for validation and comparision with bin maximums
-    # Uses Decimal module. I don't know how to use it so I convert it to float
-    total_item_vol = 0
-    total_item_weight = 0
-    for i in bestbin.items:
-        total_item_vol = total_item_vol + i.get_volume()
-        total_item_weight = total_item_weight + i.weight
-    vol_diff = float(bin_vol - total_item_vol)
-    weight_diff = float(bin_weight - total_item_weight)
     # ----
-
     # Output series in order to automatically create a dataframe from the apply function
-    # Includes more information than needed for debugging purposes as of now
+    # packer and bestbin are included for debugging purposes
     output_sr = pd.Series({'Packer': packer, 
+                           'Best Bin': bestbin,
                            'Pack Status': pack_status, 
-                           'Best Bin': bestbin, 
                            'Bin Name': bin_name, 
-                           'Bin Volume': bin_vol, 
-                           'Bin Weight': bin_weight, 
-                           'Total Item Vol': total_item_vol, 
-                           'Total Item Weight': total_item_weight, 
                            'Volume Difference': vol_diff, 
                            'Weight Difference': weight_diff})
     return output_sr
