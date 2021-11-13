@@ -42,11 +42,12 @@ def remove_na_in_cols(df, col_names = []):
 
 def remove_val_in_cols(df, col_val_dict = {}):
     """
-    Removes rows based on specified values in the specified columns. Outputs cleaned dataframe and a dataframe what was removed. \n
+    Removes rows and only keeps the values in the column that one of the specified values. \n
+    Outputs cleaned dataframe and a dataframe what was removed. \n
     Due to the loop, the exclude reason will prioritize the first item in dictionary. \n
     Arguments: \n
         df: Dataframe that you want remove rows based on values in columns \n
-        col_val_dict: Dictionary with key of column names and value of list of values to remove. Value must be a list. \n
+        col_val_dict: Dictionary with key of column names and value of list of values to keep. Value must be a list. \n
             Ex. {"Dimension UOM": ["Ft", "In"], "Weight UOM": ["Lbs"]} \n
     Returns: \n
         clean_df: Dataframe without the specified values in any of the specified columns \n
@@ -93,29 +94,35 @@ def clean_item_df(item_df):
 
     return item_df_clean, item_df_excluded
 
-def clean_merged_df(shipping_df, item_df_clean):
+def clean_merged_df(merged_df):
     """
     Merges shipping dataframe with clean item dataframe to get a dataframe with shipping orders and item dims\n
     Calculates total total\n
     Arguments:\n
-        shipping_df: Dataframe of all shipping orders. Needs to have Item Number column for merge \n
-        item_df_clean: Item dataframe that is fully defined. All items should have all dimensions \n
+        merged_df: merged data of shipping and items. Dataframe of all shipping orders. Needs to have Item Number column for merge \n
     Returns:\n
         merged_df_clean: Cleaned merged dataframe with shipping orders and items \n
         shipping_df_item_na: Dataframe of shipping orders that have an item missing dimensions \n
     """
-    # Merges the shipping dataframe with item dataframe on items
-    merged_df = pd.merge(shipping_df, item_df_clean, on ="Item Number", how="left")
     
     # Filters out the shipping orders missing items
     shipping_df_item_na = merged_df[merged_df["Unit Length"].isna()]
     merged_df_clean = merged_df[(merged_df["Sales Order Number"].isin(shipping_df_item_na["Sales Order Number"]) == False)]
 
     # Finds the total volume and total weight for shipping orders
+    # I shouldn't be calculating these in this function
     merged_df_clean.loc[:, ["Total Volume"]] = merged_df_clean["Quantity"] * merged_df_clean["Unit Volume"]
     merged_df_clean.loc[:, ["Total Weight"]] = merged_df_clean["Quantity"] * merged_df_clean["Unit Weight"]
     
     return merged_df_clean, shipping_df_item_na
+
+def get_SO_summary(SO_indexed_df):
+    SO_quantities = SO_indexed_df.groupby(level = 0)["Quantity"].sum()
+    SO_volume = SO_indexed_df.groupby(level = 0)["Total Volume"].sum()
+    SO_weight = SO_indexed_df.groupby(level = 0)["Total Weight"].sum()
+    # Quantity of items in SO, total volume of items in SO, total weight of items in SO
+    SO_summary_df = pd.concat([SO_quantities, SO_volume, SO_weight], axis = 1)
+    return SO_summary_df
 
 def get_solution_bin(packer):
     """
@@ -149,7 +156,10 @@ def get_excess_vol_weight(bin):
 
     vol_diff = float(bin.get_volume() - total_item_vol)
     weight_diff = float(bin.max_weight - total_item_weight)
-    return vol_diff, weight_diff
+    vol_util = float(total_item_vol / bin.get_volume())
+    weight_util = float(total_item_weight / bin.max_weight)
+
+    return vol_diff, weight_diff, vol_util, weight_util
 
 def pack_SO(df, bin_df):
     """
@@ -184,7 +194,7 @@ def pack_SO(df, bin_df):
     # Interpret the packed results
     # Note that values from packer use the Decimal module
     bestbin, pack_status = get_solution_bin(packer)
-    vol_diff, weight_diff = get_excess_vol_weight(bestbin)
+    vol_diff, weight_diff, vol_util, weight_util = get_excess_vol_weight(bestbin)
     bin_name = bestbin.name
     # ----
     # Output series in order to automatically create a dataframe from the apply function
@@ -194,5 +204,7 @@ def pack_SO(df, bin_df):
                            'Pack Status': pack_status, 
                            'Bin Name': bin_name, 
                            'Volume Difference': vol_diff, 
-                           'Weight Difference': weight_diff})
+                           'Weight Difference': weight_diff,
+                           'Volume Utilization': vol_util,
+                           'Weight Utilization': weight_util})
     return output_sr

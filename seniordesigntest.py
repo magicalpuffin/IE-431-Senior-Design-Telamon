@@ -1,6 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-from SO_Item_Analysis_Functions import *
+from SO_Pack_Functions import *
 
 # Imports excel data and converts to dataframes
 shipping_df = pd.read_excel("Data Inputs\\1 Year Shipping Orders.xlsx")
