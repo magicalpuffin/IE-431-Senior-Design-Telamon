@@ -7,53 +7,56 @@ item_df = pd.read_excel("Data Inputs\\Item Warehouse Data 10-5-21.xlsx")
 item_df_2 = pd.read_excel("Data Inputs\\Item Warehouse Data 11-8-21.xlsx", skiprows= 1)
 test_bins = pd.read_excel("Data Inputs\\Bin_Pack_Test_Data.xlsx", "Bins")
 
-# Organize shipping dataframe
-# Rename item column and invert quantity
-shipping_df = shipping_df.rename(columns={"Item": "Item Number"})
-shipping_df.loc[:, ["Quantity"]] = -shipping_df["Quantity"]
+# Debug!!!!
+# Creates and cleans Shipments
+shipping_df ["Quantity"] = shipping_df["Quantity"].abs()
+shipments_1 = Shipments(shipping_df, "Sales Order Number", "Item", "Quantity")
 
-# Newly added item_df 2, noter certain if it works
-item_df_2 = item_df_2.rename(columns={"Unnamed: 0": "Item Number", "Item Number": "Quantity", "Weight (lbs)": "Unit Weight", "L (in)": "Unit Length", "W (in)": "Unit Width", "D (in)" : "Unit Height"})
-item_df_2_clean, item_df_2_exclude = remove_na_in_cols(item_df_2, ["Unit Weight", "Unit Length", "Unit Width", "Unit Height"])
-item_df_2_clean["Unit Volume"] = item_df_2_clean["Unit Length"] * item_df_2_clean["Unit Width"] * item_df_2_clean["Unit Height"]
-item_df_2_clean = item_df_2_clean[["Item Number", "Unit Weight", "Unit Length", "Unit Width", "Unit Height", "Unit Volume"]]
+# Cleaning the item_df
+# Filters out other UOM
+# Converts ft to in
+item_df_clean, item_df_val = filter_values_in_cols(item_df, {"Dimension UOM": ["Ft", "In"], "Weight UOM": ["Lbs"]})
+item_df_clean.loc[item_df_clean["Dimension UOM"] == "Ft", ["Unit Length", "Unit Width", "Unit Height"]] = item_df_clean[item_df_clean["Dimension UOM"] == "Ft"][["Unit Length", "Unit Width", "Unit Height"]] * 12
+item_df_clean.loc[item_df_clean["Dimension UOM"] == "Ft", ["Dimension UOM"]] = "In"
 
-# Data cleaning functions, filter out items missing data, filter out SO missing items
-item_df, item_df_excluded = clean_item_df(item_df)
+# Creates and cleans Items
+items_1 = Items(item_df_clean, "Item Number", "Unit Length", "Unit Width", "Unit Height", "Unit Weight", "in", "lbs")
+items_1.add_volume_col()
+items_1_removed_df = items_1.remove_na()
 
-# Newley added, uncertain code
-item_merged_df = pd.concat([item_df, item_df_2_clean])
-item_df = item_merged_df
+item_df_2_clean = item_df_2.drop(columns=["Item Number"])
+items_2 = Items(item_df_2_clean, "Unnamed: 0", "L (in)", "W (in)", "D (in)", "Weight (lbs)", "in", "lbs")
+items_2.add_volume_col()
+items_2_removed_df = items_2.remove_na()
 
-# Merges the shipping dataframe with item dataframe on items
-merged_df = pd.merge(shipping_df, item_df, on ="Item Number", how="left")
-merged_df, shipping_df_item_na = clean_merged_df(merged_df)
+# Combines cleaned items
+# Merges shipments with items
+item_merged_df = pd.concat([items_1.get_df(), items_2.get_df()])
+merged_df = pd.merge(shipments_1.get_df(), item_merged_df, on ="Item Number", how="left")
 
-SO_indexed_df = merged_df.set_index(["Sales Order Number", "Item Number"])
+# Creates and cleans merged data
+# I dislike the name of the object but I have no better ideas
+merge_1  = Shipments_Items_Merge(merged_df)
+merge_1_removed_na_df = merge_1.remove_na()
+merge_1.add_total_vol_weight_col()
+merge_1_summary = merge_1.get_summary()
+merge_1_removed_filter_df = merge_1.filter_SN(max_quantity = 25, max_volume = 12000)
+
+SN_item_merge_df = merge_1.get_df()
+# ----
 
 # ----
 # Output for debug and lists of excluded items and SO
-# output_df_1 = [item_df, item_df_excluded, shipping_df_item_na, merged_df]
-# name_df_1 = ["Cleaned item data", "Excluded item data", "Missing info SO", "Merged SO Clean"]
-# df_to_excel(output_df_1, name_df_1, "clean_data.xlsx")
+# output_df_1 = [item_merged_df, item_df_val, items_1_removed_df, items_2_removed_df, merged_df, merge_1_summary]
+# name_df_1 = ["Cleaned item data", "item_df 1 fiter 1", "item_df 1 filter 2", "item_2 filter 1", "Merged_df", "Shipment Summary"]
+# df_to_excel(output_df_1, name_df_1, "Data Outputs\\clean_data.xlsx")
 # ----
-
-SO_summary_df = get_SO_summary(SO_indexed_df)
-# ----
-# Remove high quantity and high volume SO for reduced run times
-# Limits SO to only ones with low quantities to improve run time
-SO_high_quantities = SO_summary_df[SO_summary_df["Quantity"] > 25]
-SO_high_vol = SO_summary_df[SO_summary_df["Total Volume"] > 12000]
-
-SO_indexed_df_clean = SO_indexed_df.drop(SO_high_quantities.index.values, level = 0)
-SO_indexed_df_clean = SO_indexed_df_clean.drop(SO_high_vol.index.values, level = 0)
 
 # Packing algorithm on remaining SO
 # Computationally this can start to take a long time, this ran within 2 mins
 # SO with extremely high quantities will increase run time significantly
-SO_indexed_df_clean_packed_debug = SO_indexed_df_clean.groupby(level = 0).apply(pack_SO, bin_df = test_bins)
-SO_indexed_df_clean_packed = SO_indexed_df_clean_packed_debug[['Pack Status', 'Bin Name', 'Volume Difference', 'Weight Difference', 'Volume Utilization', 'Weight Utilization']]
+SN_item_merge_df_packed = SN_item_merge_df.groupby(level = 0).apply(pack_SO, bin_df = test_bins)
 
-output_df_3 = [SO_indexed_df_clean, SO_indexed_df_clean_packed, SO_indexed_df_clean_packed_debug]
-name_df_3 = ["Low quant SO", "SO Packed", "SO Packed Debug"]
+output_df_3 = [SN_item_merge_df, SN_item_merge_df_packed]
+name_df_3 = ["Low quant SN", "SN Packed", "SN Packed Debug"]
 df_to_excel(output_df_3, name_df_3, "Data Outputs\\packed_results_low_quantity.xlsx")

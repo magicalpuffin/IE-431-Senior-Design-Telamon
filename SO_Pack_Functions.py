@@ -3,13 +3,15 @@ from py3dbp import Packer, Bin, Item
 
 def df_to_excel(df_list, name_list, file_name = "py_excel_output.xlsx"):
     """
-    Inputs list of dataframes and names and outputs to excel \n
+    Exports an excel file of all dataframes. Uses file_name for file name and name_list for sheet names. \n
     Arguments: \n
-        df_list: list of dataframes to be export to excel file \n
-        name_list: list of names to assigned to each dataframe exported \n
-        file_name: file name of excel sheet, defaults to py_excel_output.xlsx \n
+        df_list: List of dataframes to exported to excel. List length for df and name should be the same. \n
+        name_list: List of names corresponding to each dataframe. Sheet name of each dataframe. \n
+        file_name: Name of the excel file to be exported. Will default to py_excel_output.xlsx \n
     """
-    # Uses openpyxl and pandas, loops through sheets and a excel writer
+    # Uses openpyxl and pandas
+    # Loops through, assigning each dataframe to corresponding sheet name
+    # This function may be better done using an dictionary
     datatoexcel = pd.ExcelWriter(file_name)
     for df, name in zip(df_list, name_list):
         df.to_excel(excel_writer = datatoexcel, sheet_name = name)
@@ -18,111 +20,198 @@ def df_to_excel(df_list, name_list, file_name = "py_excel_output.xlsx"):
 
 def remove_na_in_cols(df, col_names = []):
     """
-    Removes rows with a na in the specified columns. Outputs cleaned dataframe and a dataframe what was removed. \n
-    Due to the loop, the exclude reason will prioritize the first item in list. \n
+    Removes rows with na values in the specified columns from the dataframe. Outputs a cleaned dataframe and a dataframe of what was removed. \n
+    Column resulting in the removal is added to the removed dataframe. Due to the loop, the exclude reason will prioritize in the order the columns were listed. \n
     Arguments: \n
-        df: Dataframe that you want remove the na from \n
-        col_names: List of strings. Names of columns that should check for na values \n
+        df: Dataframe that you want remove na values from \n
+        col_names: Names of columns in dataframe to remove na values from. List of strings. \n
     Returns: \n
-        clean_df: Dataframe without na in any of the specified columns \n
-        na_df: Dataframe with na in the specified columns and exclusion reason \n
+        clean_df: Dataframe after na values removed from specified columns \n
+        na_df: Dataframe of the removed values. New column added for exclusion reason \n
     """
     clean_df = df
     na_df = pd.DataFrame()
     for col_name in col_names:
-        # Creates temporary dataframe of na in column
-        # Temporary dataframe assigned exclusion reason
-        # Data removed from clean_df by droping the index
-        # The temp_na_df is concated to the na_df
+        # Creates temporary dataframe with na values for the column
+        # dataframe with na values dropped from clean_df and and concated with full dataframe of removed values
         temp_na_df = clean_df[clean_df[col_name].isna()]
         temp_na_df = temp_na_df.assign(exclude_reason = "NA in " + col_name)
         clean_df = clean_df.drop(temp_na_df.index.values)
         na_df = pd.concat([na_df, temp_na_df])
     return clean_df, na_df
 
-def remove_val_in_cols(df, col_val_dict = {}):
+def filter_values_in_cols(df, col_val_dict = {}):
     """
-    Removes rows and only keeps the values in the column that one of the specified values. \n
-    Outputs cleaned dataframe and a dataframe what was removed. \n
+    Filters dataframe, keeping only the values specified for each column. \n
+    Outputs a cleaned dataframe and a dataframe of what was removed. \n
     Due to the loop, the exclude reason will prioritize the first item in dictionary. \n
     Arguments: \n
-        df: Dataframe that you want remove rows based on values in columns \n
+        df: Dataframe that you want filter values from \n
         col_val_dict: Dictionary with key of column names and value of list of values to keep. Value must be a list. \n
             Ex. {"Dimension UOM": ["Ft", "In"], "Weight UOM": ["Lbs"]} \n
     Returns: \n
-        clean_df: Dataframe without the specified values in any of the specified columns \n
-        not_val_df: Dataframe with na in the specified columns and exclusion reason \n
+        clean_df: Dataframe filtered to only contain the values in the list specified for the columns \n
+        removed_df: Dataframe of what was removed \n
     """
     clean_df = df
-    not_val_df = pd.DataFrame()
+    removed_df = pd.DataFrame()
     for key, value in col_val_dict.items():
+        # Key is the name of column; Value is the list of values to be kept for the column
         # Creates temporary dataframe of incorrect val in column
-        # Exclusion reason added to temporary dataframe
         # Data removed from clean_df by droping the index
-        # The temp_not_val_df is concated to the not_val_df
-        temp_not_val_df = clean_df[clean_df[key].isin(value) == False]
-        temp_not_val_df = temp_not_val_df.assign(exclude_reason = "Unacceptable value in " + key)
-        clean_df = clean_df.drop(temp_not_val_df.index.values)
-        not_val_df = pd.concat([not_val_df, temp_not_val_df])
-    return clean_df, not_val_df
+        # The temp_removed_df is concated to the removed_df
+        temp_removed_df = clean_df[clean_df[key].isin(value) == False]
+        temp_removed_df = temp_removed_df.assign(exclude_reason = "Unacceptable value in " + key)
+        clean_df = clean_df.drop(temp_removed_df.index.values)
+        removed_df = pd.concat([removed_df, temp_removed_df])
+    return clean_df, removed_df
 
-def clean_item_df(item_df):
+class Items:
     """
-    Cleans item dataframe, removes missing dims, weights, wrong dim, wrong weights. Returns cleaned item df and excluded items\n
-    Filters in order of missing dims, missing weights, wrong dim UOM, wrong weight UOM\n
-    Arguments: \n
-        item_df: item dataframe, requires a standard format \n
-    Returns: \n
-        item_df_clean: cleaned item data with uniform units (in, lbs) and no missing values \n
-        item_df_excluded: all removed items and reason of removal \n
+    Stores and manipulates item data \n
     """
+    def __init__(self, df, item_num_col, width_col, height_col, depth_col, weight_col, dim_UOM, weight_UOM):
+        """
+        Initializes the dataframe and renames its column names. Initializes units of measure. \n
+        Assumes a generic item dataframe containing: Item Number, Width, Height, Depth, Weight. \n
+        Arguments: \n
+            df: Dataframe with all items \n
+            item_num_col: String. Name of item number column in the dataframe \n
+            width_col: String. Name of the width column in the dataframe \n
+            height_col: String. Name of the height column in the dataframe \n
+            depth_col: String. Name of the depth column in the dataframe \n
+            weight_col: String. Name of the weight column in the dataframe \n
+            dim_UOM: Unit of measure for the dimensions \n
+            weight_UOM: Unit of measure for the weights \n
+        """
+        self.item_df = df.rename(columns = {item_num_col : "Item Number", width_col : "Width", height_col : "Height", depth_col : "Depth", weight_col : "Weight"})
+        self.item_df = self.item_df[["Item Number", "Width", "Height", "Depth", "Weight"]]
+        self.dim_UOM = dim_UOM
+        self.weight_UOM = weight_UOM
     
-    item_df_clean, item_df_na = remove_na_in_cols(item_df, ["Unit Length", "Unit Width", "Unit Height", "Unit Weight", 
-                                                     "Dimension UOM", "Weight UOM"])
-
-    item_df_clean, item_df_val = remove_val_in_cols(item_df_clean, {"Dimension UOM": ["Ft", "In"], "Weight UOM": ["Lbs"]})
-
-    # Cleaned data item data, do unit conversion to be in inches
-    item_df_clean.loc[item_df_clean["Dimension UOM"] == "Ft", ["Unit Length", "Unit Width", "Unit Height"]] = item_df_clean[item_df_clean["Dimension UOM"] == "Ft"][["Unit Length", "Unit Width", "Unit Height"]] * 12
-    item_df_clean.loc[item_df_clean["Dimension UOM"] == "Ft", ["Dimension UOM"]] = "In"
-    item_df_clean.loc[:, ["Unit Volume"]] = item_df_clean["Unit Length"] * item_df_clean["Unit Width"] * item_df_clean["Unit Height"]
-
-    # Keeps only useful columns
-    item_df_clean = item_df_clean[["Item Number", "Description", "Item Type", "Product Category", "Unit Length", "Unit Width", "Unit Height", "Unit Weight", "Unit Volume"]]
-
-    item_df_excluded = pd.concat([item_df_na, item_df_val])
-
-    return item_df_clean, item_df_excluded
-
-def clean_merged_df(merged_df):
-    """
-    Merges shipping dataframe with clean item dataframe to get a dataframe with shipping orders and item dims\n
-    Calculates total total\n
-    Arguments:\n
-        merged_df: merged data of shipping and items. Dataframe of all shipping orders. Needs to have Item Number column for merge \n
-    Returns:\n
-        merged_df_clean: Cleaned merged dataframe with shipping orders and items \n
-        shipping_df_item_na: Dataframe of shipping orders that have an item missing dimensions \n
-    """
+    def add_volume_col(self):
+        """
+        Adds a new volume column to the item dataframe. Calculates for volume using width, height and depth \n
+        """
+        self.item_df.loc[:, ["Volume"]] = self.item_df["Width"] * self.item_df["Height"] * self.item_df["Depth"]
     
-    # Filters out the shipping orders missing items
-    shipping_df_item_na = merged_df[merged_df["Unit Length"].isna()]
-    merged_df_clean = merged_df[(merged_df["Sales Order Number"].isin(shipping_df_item_na["Sales Order Number"]) == False)]
+    def remove_na(self):
+        """
+        Removes na values from item dataframe. Outputs a dataframe of what was removed \n
+        Returns: \n
+            removed_na_df: Dataframe of what was removed \n
+        """
+        self.item_df, removed_na_df = remove_na_in_cols(self.item_df, ["Width", "Height", "Depth", "Weight"])
+        return removed_na_df
 
-    # Finds the total volume and total weight for shipping orders
-    # I shouldn't be calculating these in this function
-    merged_df_clean.loc[:, ["Total Volume"]] = merged_df_clean["Quantity"] * merged_df_clean["Unit Volume"]
-    merged_df_clean.loc[:, ["Total Weight"]] = merged_df_clean["Quantity"] * merged_df_clean["Unit Weight"]
+    def get_df(self):
+        """
+        Returns the current item dataframe \n
+        Returns: \n
+            self.item_df: Current item dataframe \n
+        """
+        return self.item_df
+        
+class Shipments:
+    """
+    Stores and manipulates shipment data \n
+    """
+    def __init__(self, df, shipment_num_col, item_num_col, quantity_col):
+        """
+        Initializes the dataframe and renames its column names. \n
+        Assumes a generic shipment dataframe containing: Shipment Number, Item Number, Quantity. \n
+        Arguments: \n
+            df: Dataframe with all shipments \n
+            shipment_num_col: String. Name of shipment number column in the dataframe \n
+            item_num_col: String. Name of the item number column in the dataframe \n
+            quantity_col: String. Name of the quantity column in the dataframe \n
+        """
+        self.shipment_df = df.rename(columns = {shipment_num_col : "Shipment Number", item_num_col : "Item Number", quantity_col : "Quantity"})
+        self.shipment_df = self.shipment_df[["Shipment Number", "Item Number", "Quantity"]]
+
+    def get_df(self):
+        """
+        Returns the current shipment dataframe \n
+        Returns: \n
+            self.shipment_df: Current shipment dataframe \n
+        """
+        return self.shipment_df
+
+class Shipments_Items_Merge:
+    """
+    Stores and manipulates the merged shipments and items data \n
+    I dislike the current name of this class but I have no better ideas \n
+    """
+    def __init__(self, df):
+        """
+        Initializes the dataframe and sets the Sipment Number and Item Number as indexes. \n
+        Assumes a generic merged dataframe containing: Shipment Number, Item Number, Quantity, Width, Height, Depth, Weight, Volume. \n
+        Arguments: \n
+            df: Dataframe of merged shipments and items. Needs to have correct column names. \n
+        """
+        self.merge_df = df.set_index(["Shipment Number", "Item Number"])
+
+    def add_total_vol_weight_col(self):
+        """
+        Adds Total Volume and Total Weight columns to the merged dataframe. Total volume and weight are of the item type in the shipment. \n
+        Item volume and item weight multiplied by quantity. \n
+        """
+        self.merge_df.loc[:, ["Total Volume"]] = self.merge_df["Quantity"] * self.merge_df["Volume"]
+        self.merge_df.loc[:, ["Total Weight"]] = self.merge_df["Quantity"] * self.merge_df["Weight"]
+
+    def remove_na(self):
+        """
+        Removes shipments that contain items missing data. Even if a shipment is only missing one item data, the entire shipment will be removed. \n
+        Outputs a dataframe of what was removed. \n
+        Returns: \n
+            removed_na_df: Dataframe of what was removed \n
+        """
+        # Assumes a shipment missing width will be missing other dimensions
+        # Finds shipments with items missing data and removes entire shipment
+        removed_na_df = self.merge_df[self.merge_df["Width"].isna()]
+        self.merge_df = self.merge_df.drop(removed_na_df.index.get_level_values(0), level = 0)
+        return removed_na_df
+
+    def get_summary(self):
+        """
+        Creates a shipment summary dataframe that includes: Shipment Number, Quantity, Total Volume, Total Weight. \n
+        Columns describe the shipment, the total quantity of items, total volume and total weight for each shipment number. \n
+        Returns: \n
+            self.SN_summary_df: Summary dataframe of shipment numbers\n
+        """
+        SN_quantities = self.merge_df.groupby(level = 0)["Quantity"].sum()
+        SN_volume = self.merge_df.groupby(level = 0)["Total Volume"].sum()
+        SN_weight = self.merge_df.groupby(level = 0)["Total Weight"].sum()
+        # Quantity of items in SN, total volume of items in SN, total weight of items in SN
+        self.SN_summary_df = pd.concat([SN_quantities, SN_volume, SN_weight], axis = 1)
+        return self.SN_summary_df
     
-    return merged_df_clean, shipping_df_item_na
+    def filter_SN(self, max_quantity, max_volume):
+        """
+        Filters the merged dataframe based on max shipment quantity and volume. Requires a self.SN_summary_df. \n
+        Removes shipment numbers from merged dataframe. \n
+        Arguments: \n
+            max_quantity: Maximum quantity of items within a shipment \n
+            max_volume: Maximum volume in a shipment \n
+        Returns: \n
+            removed_df: Dataframe of what was removed \n
+        """
+        SO_high_quantities = self.SN_summary_df[self.SN_summary_df["Quantity"] > max_quantity]
+        SO_high_vol = self.SN_summary_df[self.SN_summary_df["Total Volume"] > max_volume]
 
-def get_SO_summary(SO_indexed_df):
-    SO_quantities = SO_indexed_df.groupby(level = 0)["Quantity"].sum()
-    SO_volume = SO_indexed_df.groupby(level = 0)["Total Volume"].sum()
-    SO_weight = SO_indexed_df.groupby(level = 0)["Total Weight"].sum()
-    # Quantity of items in SO, total volume of items in SO, total weight of items in SO
-    SO_summary_df = pd.concat([SO_quantities, SO_volume, SO_weight], axis = 1)
-    return SO_summary_df
+        self.merge_df = self.merge_df.drop(SO_high_quantities.index.values, level = 0)
+        self.merge_df = self.merge_df.drop(SO_high_vol.index.values, level = 0)
+
+        removed_df = pd.concat([SO_high_quantities, SO_high_vol])
+        return removed_df
+
+    def get_df(self):
+        """
+        Returns the current merged dataframe \n
+        Returns: \n
+            self.merge_df: Current merged dataframe \n
+        """
+        return self.merge_df
 
 def get_solution_bin(packer):
     """
@@ -181,7 +270,7 @@ def pack_SO(df, bin_df):
     # Index should be the item name.
     for index, row in df.iterrows():
         for i in range(int(row["Quantity"])):
-            packer.add_item(Item(index, row["Unit Length"], row["Unit Width"], row["Unit Height"], row["Unit Weight"]))
+            packer.add_item(Item(index, row["Width"], row["Height"], row["Depth"], row["Weight"]))
 
     # Loops though each bins and adds them into the packer object
     # I want to switch this to use indexes but it breaks the package for some reason
@@ -199,9 +288,7 @@ def pack_SO(df, bin_df):
     # ----
     # Output series in order to automatically create a dataframe from the apply function
     # packer and bestbin are included for debugging purposes
-    output_sr = pd.Series({'Packer': packer, 
-                           'Best Bin': bestbin,
-                           'Pack Status': pack_status, 
+    output_sr = pd.Series({'Pack Status': pack_status, 
                            'Bin Name': bin_name, 
                            'Volume Difference': vol_diff, 
                            'Weight Difference': weight_diff,
