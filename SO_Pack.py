@@ -79,5 +79,5 @@ data_len.append(["Shipments Packed", len(SN_item_merge_df_packed)])
 data_len_df = pd.DataFrame(data_len, columns = ["Name", "Value"])
 
 output_df_3 = [SN_item_merge_df, SN_item_merge_df_packed, data_len_df]
-name_df_3 = ["Low quant SN", "SN Packed", "Data Lengths"]
+name_df_3 = ["Shipments Items Merged", "SN Packed", "Data Lengths"]
 df_to_excel(output_df_3, name_df_3, "Data Outputs\\packed_results.xlsx")
