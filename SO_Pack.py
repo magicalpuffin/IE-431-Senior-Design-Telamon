@@ -15,7 +15,7 @@ data_len.append(["Items 2 Initial", len(item_df_2)])
 data_len.append(["Bins", len(test_bins)])
 
 # Creates and cleans Shipments
-shipping_df ["Quantity"] = shipping_df["Quantity"].abs()
+shipping_df["Quantity"] = shipping_df["Quantity"].abs()
 shipments_1 = Shipments(shipping_df, "Sales Order Number", "Item", "Quantity")
 
 # Filter 1 for items_df. The data is a mess
