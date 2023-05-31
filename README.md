@@ -1,0 +1,2 @@
+# IE-431-Senior-Design-Telamon
+This project was created for Telamon as part of the IE 431 Senior Design class. The client request was to identify a set of boxes which could more efficiently pack their shipments. The fewer boxes and less excess volume the better. This repository contains scripts used as part of the analysis. The bin packing problem would be solved for each shipment for each available box. Optimal boxes and excess volume would be used to evaluate the performance of a set of boxes.
